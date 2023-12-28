@@ -140,6 +140,8 @@ MAKE_NAMES:
         if (!newfile.Write(writebuf, k)) {
             // 如果写发生错误，则错误退出
             orgfile.Close();
+            _tprintf(_T("Failed saving converted file for %s.\n"), filename);
+
 FAIL2:
             newfile.Abort();
 
@@ -149,11 +151,15 @@ FAIL1:
     }
 
     orgfile.Close();
-    newfile.Close();
+
+    if (!newfile.Close()) {
+        _tprintf(_T("Failed closing converted file for %s.\n"), filename);
+        return FALSE;
+    }
 
     if (tab_found) {
-        // 原文件中发现至少一个tab, 我们需要将原文件名改为备份文件名
-        // 将新文件名改为原文件名
+        // 原文件中发现至少一个tab
+        // 我们需要将原文件改为备份文件名，新文件改为原文件名
         if (CFile::Rename(filename, bakfilename)) {
             if (CFile::Rename(newfilename, filename)) {
                 return TRUE;
