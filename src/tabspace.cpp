@@ -1,3 +1,27 @@
+// Windows utility to batch convert tab to 4 spaces in files in a directory
+// 
+// Copyright (c)2023 Yiping Cheng, mailto:ypcheng@bjtu.edu.cn
+// Beijing Jiaotong University. All rights reserved.
+// https://www.researchgate.net/profile/Yiping-Cheng/research
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
+
 #include "cfile.h"
 #include <stdio.h>
 #include <windows.h>
@@ -13,12 +37,16 @@ extern "C" {
 
 int __cdecl _tmain(int argc, TCHAR** argv)
 {
-    TCHAR curr_dir[MAX_PATH];
+    // 显示当前目录。用{括起来}是为了节约栈空间使用量
+    {
+        TCHAR curr_dir[MAX_PATH];
 
-    GetCurrentDirectory(MAX_PATH, curr_dir);
-    _tprintf(_T("Current directory: %s\n"), curr_dir);
+        GetCurrentDirectory(MAX_PATH, curr_dir);
+        _tprintf(_T("Current directory: %s\n"), curr_dir);
+    }
 
     if (argc < 2) {
+        // 本工具主要服务于C,C++语言
         _tprintf(_T("\nConverting tab to 4 spaces in *.c files\n"));
         TabToSpaceFiles(_T("*.c"));
 
@@ -29,6 +57,7 @@ int __cdecl _tmain(int argc, TCHAR** argv)
         TabToSpaceFiles(_T("*.h"));
     }
     else {
+        // 每个命令行参数为一个文件通配符
         for (int i = 1; i < argc; i++) {
             _tprintf(_T("\nConverting tab to 4 spaces in %s files\n"), argv[i]);
             TabToSpaceFiles(argv[i]);
@@ -66,7 +95,6 @@ void TabToSpaceFiles(LPCTSTR ext)
 }
 
 
-
 #define READBUFSIZE     32
 #define TAB             '\t'
 #define SPACE           ' '
@@ -76,13 +104,23 @@ BOOL TabToSpace(LPCTSTR filename)
     TCHAR bakfilename[MAX_PATH], newfilename[MAX_PATH];
     LPCTSTR suffix_bak = _T("bak");
     LPCTSTR suffix_new = _T("new");
-    LPCTSTR p = filename;
-    LPCTSTR strend;
+    LPCTSTR p, strend;
+    CFile orgfile, newfile;
+    BYTE readbuf[READBUFSIZE], writebuf[READBUFSIZE*4];
+    UINT cbytes, i, k;
+    BOOL tab_found = FALSE;
 
-    while (*p) {
-        if (_T('.') != *p) {
-            p++;
-        } else {
+
+    strend = &filename[MAX_PATH-3];
+    for (p = filename; *p; p++) {
+        if (p == strend) {
+            // 我们构造备份文件名和新文件名是通过添加后缀，过长的原文件名会导致文件名相同的问题
+            // 虽然，通过修改程序代码可以实现转换，但是这种情况实在罕见
+            // 而且取太长的文件名本身就不好，难道不应该给予一点惩罚吗？
+            _tprintf(_T("Tabspace does not process files with too long filename.\n"));
+            return FALSE;
+        }
+        if (_T('.') == *p) {
             goto MAKE_NAMES;
         }
     }
@@ -100,11 +138,6 @@ MAKE_NAMES:
     strend = &newfilename[MAX_PATH-1];
     strcpy_x(strcpy_x(newfilename, strend, filename), strend, suffix_new);
 
-
-    CFile orgfile, newfile;
-    BYTE readbuf[READBUFSIZE], writebuf[READBUFSIZE*4];
-    UINT cbytes, i, k;
-    BOOL tab_found = FALSE;
 
     // 我们是将转换后的文件存成一个新文件，所以需要打开此新文件用于写
     if (!newfile.Open(newfilename, CFile::modeWrite | CFile::modeCreate)) {
@@ -141,10 +174,8 @@ MAKE_NAMES:
             // 如果写发生错误，则错误退出
             orgfile.Close();
             _tprintf(_T("Failed saving converted file for %s.\n"), filename);
-
 FAIL2:
             newfile.Abort();
-
 FAIL1:
             return FALSE;
         }
