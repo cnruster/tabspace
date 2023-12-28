@@ -18,9 +18,6 @@
     <ClCompile Include="src\cfile.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\cstdiofile.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\tabspace.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

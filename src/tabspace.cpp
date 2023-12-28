@@ -101,7 +101,7 @@ MAKE_NAMES:
     strcpy_x(strcpy_x(newfilename, strend, filename), strend, suffix_new);
 
 
-    CStdioFile orgfile, newfile;
+    CFile orgfile, newfile;
     BYTE readbuf[READBUFSIZE], writebuf[READBUFSIZE*4];
     UINT cbytes, i, k;
     BOOL tab_found = FALSE;

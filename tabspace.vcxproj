@@ -76,7 +76,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\cfile.cpp" />
-    <ClCompile Include="src\cstdiofile.cpp" />
     <ClCompile Include="src\strcpy_x.c" />
     <ClCompile Include="src\tabspace.cpp" />
   </ItemGroup>
