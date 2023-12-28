@@ -45,8 +45,8 @@ void TabToSpaceFiles(LPCTSTR ext)
     // 找到第一个文件
     hFind = FindFirstFile(ext, &FindFileData);
     if (hFind == INVALID_HANDLE_VALUE) {
-        _tprintf(_T("\nFindFirstFile for %s failed (%d).\n"), 
-            ext, GetLastError());
+        _tprintf(_T("\nFindFirstFile for %s failed. "
+        "Most likely there is no such file there.\n"), ext);
         return;
     }
 
@@ -106,15 +106,15 @@ MAKE_NAMES:
     UINT cbytes, i, k;
     BOOL tab_found = FALSE;
 
-    // 打开需转换的文件
-    if (!orgfile.Open(filename, CFile::modeRead)) {
-        _tprintf(_T("Failed opening %s.\n"), filename);
-        goto FAIL1;
-    }
-
     // 我们是将转换后的文件存成一个新文件，所以需要打开此新文件用于写
     if (!newfile.Open(newfilename, CFile::modeWrite | CFile::modeCreate)) {
         _tprintf(_T("Failed creating converted file for %s.\n"), filename);
+        goto FAIL1;
+    }
+    
+    // 打开需转换的文件
+    if (!orgfile.Open(filename, CFile::modeRead)) {
+        _tprintf(_T("Failed opening %s.\n"), filename);
         goto FAIL2;
     }
 
@@ -139,17 +139,17 @@ MAKE_NAMES:
         // readbuf读满后将writebuf写入文件
         if (!newfile.Write(writebuf, k)) {
             // 如果写发生错误，则错误退出
-            newfile.Abort();
-FAIL2:
             orgfile.Close();
-            
+FAIL2:
+            newfile.Abort();
+
 FAIL1:
             return FALSE;
         }
     }
 
-    newfile.Close();
     orgfile.Close();
+    newfile.Close();
 
     if (tab_found) {
         // 原文件中发现至少一个tab, 我们需要将原文件名改为备份文件名
