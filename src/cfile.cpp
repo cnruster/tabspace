@@ -36,7 +36,7 @@ BOOL CFile::Open(LPCTSTR lpszFileName, UINT nOpenFlags)
     m_bCloseOnDelete = FALSE;
 
     ASSERT(_tcslen(lpszFileName)<_MAX_PATH);
-    strcpy(m_strFileName, lpszFileName);
+    _tcscpy(m_strFileName, lpszFileName);
 
     ASSERT(sizeof(HANDLE) == sizeof(UINT));
     ASSERT(shareCompat == 0);
@@ -175,7 +175,6 @@ BOOL CFile::Close()
 
     return bSucc;
 }
-
 
 
 void CFile::Abort()
