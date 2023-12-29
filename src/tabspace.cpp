@@ -25,6 +25,7 @@
 #include "cfile.h"
 #include <stdio.h>
 #include <windows.h>
+#include <shlwapi.h>
 
 BOOL TabToSpace(LPCTSTR filename);
 void TabToSpaceFiles(LPCTSTR ext);
@@ -32,7 +33,7 @@ void TabToSpaceFiles(LPCTSTR ext);
 // 在C++中调用C语言写的函数，或引用C语言里定义的全局变量，必须有这个
 extern "C" {
     TCHAR* strcpy_x(TCHAR* strdst, const TCHAR* strdst_end, const TCHAR* strsrc);
-};
+}
 
 
 int __cdecl _tmain(int argc, TCHAR** argv)
@@ -103,7 +104,7 @@ BOOL TabToSpace(LPCTSTR filename)
 {
     TCHAR bakfilename[MAX_PATH], newfilename[MAX_PATH];
     LPCTSTR suffix_bak = _T("bak");
-    LPCTSTR suffix_new = _T("new");
+    LPCTSTR suffix_new = _T("tsc"); // tsc = tab-space converted
     LPCTSTR p, strend;
     CFile orgfile, newfile;
     BYTE readbuf[READBUFSIZE], writebuf[READBUFSIZE*4];
@@ -111,36 +112,28 @@ BOOL TabToSpace(LPCTSTR filename)
     BOOL tab_found = FALSE;
 
 
-    strend = &filename[MAX_PATH-3];
     for (p = filename; *p; p++) {
-        if (p == strend) {
-            // 我们构造备份文件名和新文件名是通过添加后缀，过长的原文件名会导致文件名相同的问题
-            // 虽然，通过修改程序代码可以实现转换，但是这种情况实在罕见
-            // 而且取太长的文件名本身就不好，难道不应该给予一点惩罚吗？
-            _tprintf(_T("Tabspace does not process files with too long filename.\n"));
-            return FALSE;
-        }
         if (_T('.') == *p) {
             goto MAKE_NAMES;
         }
     }
 
-    // 原文件名中没有"."
+    // 原文件名中没有".", 需特殊处理
     suffix_bak = _T(".bak");
-    suffix_new = _T(".new");
+    suffix_new = _T(".tsc");
 
 MAKE_NAMES:
     // 将需转换的文件名后面加"bak", 构造出一个备份文件名
     strend = &bakfilename[MAX_PATH-1];
     strcpy_x(strcpy_x(bakfilename, strend, filename), strend, suffix_bak);
 
-    // 将需转换的文件名后面加"new", 构造出一个新文件名
+    // 将需转换的文件名后面加"tsc", 构造出一个新文件名
     strend = &newfilename[MAX_PATH-1];
     strcpy_x(strcpy_x(newfilename, strend, filename), strend, suffix_new);
 
-
-    // 我们是将转换后的文件存成一个新文件，所以需要打开此新文件用于写
-    if (!newfile.Open(newfilename, CFile::modeWrite | CFile::modeCreate)) {
+    // 我们是将转换后的文件存成一个新文件，所以需要创建此新文件用于写
+    if (PathFileExists(newfilename) || //新文件名不能与现有文件重名
+        !newfile.Open(newfilename, CFile::modeWrite | CFile::modeCreate)) {
         _tprintf(_T("Failed creating converted file for %s.\n"), filename);
         goto FAIL1;
     }
@@ -171,7 +164,7 @@ MAKE_NAMES:
 
         // readbuf读满后将writebuf写入文件
         if (!newfile.Write(writebuf, k)) {
-            // 如果写发生错误，则错误退出
+            // 写发生错误，退出
             orgfile.Close();
             _tprintf(_T("Failed saving converted file for %s.\n"), filename);
 FAIL2:
