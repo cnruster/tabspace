@@ -212,7 +212,8 @@ FAIL:
 		}
 		else {
 			if (state == stInitial) {
-				PUT_BYTES(TAB, ccws/4);
+				// so that indent of 2 spaces will get a tab
+				PUT_BYTES(TAB, (ccws+2)/4);
 				state = stRightSeg;
 			}
 			else if (state == stRightSeg) {
