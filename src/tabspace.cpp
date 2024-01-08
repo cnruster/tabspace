@@ -1,5 +1,5 @@
-// Windows utility to batch convert tab to 4 spaces in files in a directory
-// 
+// Windows utility to batch convert program files to tab-space rule compliant
+//
 // Copyright (c)2023 Yiping Cheng, mailto:ypcheng@bjtu.edu.cn
 // Beijing Jiaotong University. All rights reserved.
 // https://www.researchgate.net/profile/Yiping-Cheng/research
@@ -22,188 +22,249 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#include "cfile.h"
-#include <stdio.h>
-#include <windows.h>
 #include <shlwapi.h>
+#include <minwinbase.h>
+#include "cfile.h"
+#include "fabsr.h"
+#include "fabsw.h"
 
-BOOL TabToSpace(LPCTSTR filename);
-void TabToSpaceFiles(LPCTSTR ext);
 
-// 在C++中调用C语言写的函数，或引用C语言里定义的全局变量，必须有这个
 extern "C" {
-    TCHAR* strcpy_x(TCHAR* strdst, const TCHAR* strdst_end, const TCHAR* strsrc);
+	TCHAR* strcpy_x(TCHAR* strdst, const TCHAR* strdst_end, const TCHAR* strsrc);
 }
 
-
-int __cdecl _tmain(int argc, TCHAR** argv)
-{
-    // 显示当前目录。用{括起来}是为了节约栈空间使用量
-    {
-        TCHAR curr_dir[MAX_PATH];
-
-        GetCurrentDirectory(MAX_PATH, curr_dir);
-        _tprintf(_T("Current directory: %s\n"), curr_dir);
-    }
-
-    if (argc < 2) {
-        // 本工具主要服务于C,C++语言
-        _tprintf(_T("\nConverting tab to 4 spaces in *.c files\n"));
-        TabToSpaceFiles(_T("*.c"));
-
-        _tprintf(_T("\nConverting tab to 4 spaces in *.cpp files\n"));
-        TabToSpaceFiles(_T("*.cpp"));
-
-        _tprintf(_T("\nConverting tab to 4 spaces in *.h files\n"));
-        TabToSpaceFiles(_T("*.h"));
-    }
-    else {
-        // 每个命令行参数为一个文件通配符
-        for (int i = 1; i < argc; i++) {
-            _tprintf(_T("\nConverting tab to 4 spaces in %s files\n"), argv[i]);
-            TabToSpaceFiles(argv[i]);
-        }
-    }
-}
-
-// 将具有一种扩展名的文件进行tab->space转换
-void TabToSpaceFiles(LPCTSTR ext)
-{
-    WIN32_FIND_DATA FindFileData;
-    HANDLE hFind;
-
-    // 找到第一个文件
-    hFind = FindFirstFile(ext, &FindFileData);
-    if (hFind == INVALID_HANDLE_VALUE) {
-        _tprintf(_T("\nFindFirstFile for %s failed. "
-        "Most likely there is no such file there.\n"), ext);
-        return;
-    }
-
-    _tprintf(_T("\nFindFirstFile for %s successful.\n"), ext);
-
-    do {
-        // 将找到的文件tab->space
-        if (TabToSpace(FindFileData.cFileName)) {
-            _tprintf(_T("Tab-space conversion for %s successful.\n"), 
-                FindFileData.cFileName);
-        }
-        else {
-            _tprintf(_T("Tab-space conversion for %s failed.\n"),
-                FindFileData.cFileName);
-        }
-    } while (FindNextFile(hFind, &FindFileData));
-}
+// State values
+enum State {
+	stInitial = (int)0x00000,
+	stRightSeg = (int)0x00001,
+	stExpectLF = (int)0x00002
+};
 
 
-#define READBUFSIZE     32
 #define TAB             '\t'
 #define SPACE           ' '
+#define CR              '\r'
+#define LF              '\n'
 
-BOOL TabToSpace(LPCTSTR filename)
+#define PUT_BYTE_MAIN(b) \
+	do { \
+		if (!fabsw.PutByte(b)) { \
+WRITE_FAIL: \
+			_tprintf(_T("%s : conversion failed " \
+				"when writing TSC file\n"), filename); \
+			goto FAIL; \
+		} \
+	} while (0)
+
+#define PUT_BYTE(b) \
+	do { \
+		if (!fabsw.PutByte(b)) { \
+			goto WRITE_FAIL; \
+		} \
+	} while (0)
+
+#define PUT_BYTES(b, r) \
+	do { \
+		if (!fabsw.PutBytes(b, r)) { \
+			goto WRITE_FAIL; \
+		} \
+	} while (0)
+
+
+static TCHAR bakfilename[MAX_PATH], tscfilename[MAX_PATH];
+static FABSR fabsr;
+static FABSW fabsw;
+
+void TSConvert(LPCTSTR filename)
 {
-    TCHAR bakfilename[MAX_PATH], newfilename[MAX_PATH];
-    LPCTSTR suffix_bak = _T("bak");
-    LPCTSTR suffix_new = _T("tsc"); // tsc = tab-space converted
-    LPCTSTR p, strend;
-    CFile orgfile, newfile;
-    BYTE readbuf[READBUFSIZE], writebuf[READBUFSIZE*4];
-    UINT cbytes, i, k;
-    BOOL tab_found = FALSE;
+	LPCTSTR suffix_bak = _T("bak");
+	LPCTSTR suffix_tsc = _T("tsc"); // tsc = tab-space converted
+	LPCTSTR p, strend;
+	HANDLE orgfile, tscfile;
+	BOOL changed;
+	enum State state;
+	UINT ccws;          // count of consecutive white spaces
+	BOOL resgb;         // result of fabsr.GetByte()
+	BYTE byte;
 
 
-    for (p = filename; *p; p++) {
-        if (_T('.') == *p) {
-            goto MAKE_NAMES;
-        }
-    }
+	for (p = filename; *p; p++) {
+		if (_T('.') == *p) {
+			if (_tcsstr(p + 1, suffix_bak)) {
+				_tprintf(_T("%s : not processed by Tabspace as its extension contains %s\n"),
+					filename, suffix_bak);
+				return;
+			}
+			goto MAKE_NAMES;
+		}
+	}
 
-    // 原文件名中没有".", 需特殊处理
-    suffix_bak = _T(".bak");
-    suffix_new = _T(".tsc");
+	// needs special handling when there is no "." in the file name
+	suffix_bak = _T(".bak");
+	suffix_tsc = _T(".tsc");
 
 MAKE_NAMES:
-    // 将需转换的文件名后面加"bak", 构造出一个备份文件名
-    strend = &bakfilename[MAX_PATH-1];
-    strcpy_x(strcpy_x(bakfilename, strend, filename), strend, suffix_bak);
+	// the backup file name is the orginal file name plus "bak" or ".bak"
+	strend = &bakfilename[MAX_PATH-1];
+	strcpy_x(strcpy_x(bakfilename, strend, filename), strend, suffix_bak);
 
-    // 将需转换的文件名后面加"tsc", 构造出一个新文件名
-    strend = &newfilename[MAX_PATH-1];
-    strcpy_x(strcpy_x(newfilename, strend, filename), strend, suffix_new);
+	// the tsc file name is the orginal file name plus "tsc" or ".tsc"
+	strend = &tscfilename[MAX_PATH-1];
+	strcpy_x(strcpy_x(tscfilename, strend, filename), strend, suffix_tsc);
 
-    // 我们是将转换后的文件存成一个新文件，所以需要创建此新文件用于写
-    if (PathFileExists(newfilename) || //新文件名不能与现有文件重名
-        !newfile.Open(newfilename, CFile::modeWrite | CFile::modeCreate)) {
-        _tprintf(_T("Failed creating converted file for %s.\n"), filename);
-        goto FAIL1;
-    }
-    
-    // 打开需转换的文件
-    if (!orgfile.Open(filename, CFile::modeRead)) {
-        _tprintf(_T("Failed opening %s.\n"), filename);
-        goto FAIL2;
-    }
+	// now create the tsc file, it must not name-clash with existing files
+	// we do not think of a different name to avoid name clash
+	// because that is too rare
+	if (PathFileExists(tscfilename) ||
+		!(tscfile = CFile::Open(tscfilename,
+			CFile::modeWrite | CFile::modeCreate | CFile::typeBinary))) {
+		_tprintf(_T("%s : conversion failed when creating TSC file\n"),
+			filename);
+		return;
+	}
 
-    // 开始实际执行转换
-    while (cbytes = orgfile.Read(readbuf, READBUFSIZE)) {
-        k = 0;
-        for (i = 0; i < cbytes; i++) {
-            if (readbuf[i] == TAB) {
-                tab_found = TRUE;
-                // 如果读到的字符是tab, 则变成4个空格
-                writebuf[k++] = SPACE;
-                writebuf[k++] = SPACE;
-                writebuf[k++] = SPACE;
-                writebuf[k++] = SPACE;
-            }
-            else {
-                // 否则原样输出
-                writebuf[k++] = readbuf[i];
-            }
-        }
+	// open the original file
+	if (!(orgfile = CFile::Open(filename, CFile::modeRead | CFile::typeBinary))) {
+		_tprintf(_T("%s : conversion failed when opening it\n"), filename);
 
-        // readbuf读满后将writebuf写入文件
-        if (!newfile.Write(writebuf, k)) {
-            // 写发生错误，退出
-            orgfile.Close();
-            _tprintf(_T("Failed saving converted file for %s.\n"), filename);
-FAIL2:
-            newfile.Abort();
-FAIL1:
-            return FALSE;
-        }
-    }
+ABORT_TSC:
+		CFile::Close(tscfile);
+		DeleteFile(tscfilename);
+		return;
+	}
 
-    orgfile.Close();
+	// now the actual conversion begins
+	fabsr.Bind(orgfile);
+	fabsw.Bind(tscfile);
 
-    if (!newfile.Close()) {
-        _tprintf(_T("Failed closing converted file for %s.\n"), filename);
-        return FALSE;
-    }
+	changed = FALSE;
+	state = stInitial;
+	ccws = 0;
 
-    if (tab_found) {
-        // 原文件中发现至少一个tab
-        // 我们需要将原文件改为备份文件名，新文件改为原文件名
-        if (CFile::Rename(filename, bakfilename)) {
-            if (CFile::Rename(newfilename, filename)) {
-                return TRUE;
-            }
-            else {
-                _tprintf(_T("Original file is renamed as %s. "
-                    "Converted file is generated as %s.\n"),
-                    bakfilename, newfilename);
-                return FALSE;
-            }
-        }
-        else  {
-            _tprintf(_T("Original file keeps its name %s. "
-                "Converted file is generated as %s.\n"),
-                filename, newfilename);
-            return FALSE;
-        }
-    }
-    
-    // 原文件中没有发现tab, 因此新文件和原文件是一模一样的，删除新文件
-    CFile::Remove(newfilename);
-    return TRUE;
+	for (;;) {
+		if ((resgb = fabsr.GetByte(byte)) < 0) {
+			_tprintf(_T("%s : conversion failed when reading it\n"),
+				filename);
+FAIL:
+			CFile::Close(orgfile);
+			goto ABORT_TSC;
+		}
+
+		if (resgb == 0) { // end of file encountered
+			if (state != stExpectLF) {
+				if (ccws) {
+					changed = TRUE; // because the trailing spaces are discarded
+				}
+			}
+			else {
+				PUT_BYTE_MAIN(LF);
+			}
+
+			break;
+		}
+
+		if (byte == CR) {
+			state = stExpectLF;
+			changed = TRUE; // since we adopt the UNIX standard for line breaking
+			// a single LF is used. So CR will be discarded.
+			// later, there is no need to set changed to TRUE because
+			// it is already set here
+		}
+		else if (byte == LF) {
+			PUT_BYTE(LF);
+			if (ccws) {
+				changed = TRUE;
+			}
+			state = stInitial;
+			ccws = 0;
+		}
+		else if (byte == TAB) {
+			if (state == stInitial) {
+				ccws += 4; // 1 tab = 4 spaces, but not put them until suitable time
+			}
+			else if (state == stRightSeg) {
+				// stRightSeg indicates after the first non-space non-tab character
+				ccws += 4;
+				changed = TRUE;
+			}
+			else {
+				PUT_BYTE(LF);
+				state = stInitial;
+				ccws = 4; // these spaces belong to the new line
+			}
+		}
+		else if (isspace(byte)) {
+			if (state == stInitial) {
+				ccws++;
+				changed = TRUE;
+			}
+			else if (state == stRightSeg) {
+				ccws++;
+				if (byte != SPACE) {
+					changed = TRUE;
+				}
+			}
+			else {
+				PUT_BYTE(LF);
+				state = stInitial;
+				ccws = 1; // this space belongs to the new line
+			}
+		}
+		else {
+			if (state == stInitial) {
+				PUT_BYTES(TAB, ccws/4);
+				state = stRightSeg;
+			}
+			else if (state == stRightSeg) {
+				PUT_BYTES(SPACE, ccws);
+			}
+			else {
+				PUT_BYTE(LF);
+				state = stInitial;
+			}
+			PUT_BYTE(byte);
+			ccws = 0;
+		}
+	}
+
+	CFile::Close(orgfile);
+
+	if (!changed) {
+		// the tsc file is the same as the original file, so delete it
+		_tprintf(_T("%s : already tab-space compliant so left unchanged\n"),
+			filename);
+		goto ABORT_TSC;
+	}
+
+	if (!fabsw.EndPut()) {  // write the remaining bytes in the fabsw buffer
+		_tprintf(_T("%s : conversion failed when saving TSC file\n"),
+				filename);
+		goto ABORT_TSC;
+	}
+
+	if (!CFile::Close(tscfile)) {
+		_tprintf(_T("%s : conversion failed when closing TSC file\n"),
+			filename);
+
+		DeleteFile(tscfilename);
+		return;
+	}
+
+	// if conversion successful, rename the original file to bakfilename
+	// and rename the tsc file to original filename
+
+	if (!MoveFile(filename, bakfilename)) {
+		_tprintf(_T("%s : still the original file due to renaming failure,"
+			" but its TSC file is %s\n"),
+			filename, tscfilename);
+		return;
+	}
+
+	if (!MoveFile(tscfilename, filename)) {
+		_tprintf(_T("%s : now renamed as %s, whose TSC file is %s\n"),
+			filename, bakfilename, tscfilename);
+		return;
+	}
+
+	_tprintf(_T("%s : tab-space conversion successful\n"), filename);
 }

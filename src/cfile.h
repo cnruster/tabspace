@@ -1,128 +1,145 @@
-#include <tchar.h>
+// CFile header adapted from MFC, Microsoft
+// by Yiping Cheng, mailto:ypcheng@bjtu.edu.cn
+// Beijing Jiaotong University
+// https://www.researchgate.net/profile/Yiping-Cheng/research
+
+#pragma once
+
 #include <windows.h>
+#include <tchar.h>
 #include <stdio.h>
+#include <assert.h>
 
-/////////////////////////////////////////////////////////////////////////////
-// File - raw unbuffered disk file I/O
+#ifndef AFX_INLINE
+#define AFX_INLINE inline /*__forceinline*/
+#endif
 
-class CFile
-{
-public:
-// Flag values
-    enum OpenFlags {
-        modeRead =          0x0000,
-        modeWrite =         0x0001,
-        modeReadWrite =     0x0002,
-        shareCompat =       0x0000,
-        shareExclusive =    0x0010,
-        shareDenyWrite =    0x0020,
-        shareDenyRead =     0x0030,
-        shareDenyNone =     0x0040,
-        modeNoInherit =     0x0080,
-        modeCreate =        0x1000,
-        modeNoTruncate =    0x2000,
-        typeText =          0x4000, // typeText and typeBinary are used in
-        typeBinary =   (int)0x8000 // derived classes only
-        };
-
-    enum Attribute {
-        normal =    0x00,
-        readOnly =  0x01,
-        hidden =    0x02,
-        system =    0x04,
-        volume =    0x08,
-        directory = 0x10,
-        archive =   0x20
-        };
-
-    enum SeekPosition { begin = 0x0, current = 0x1, end = 0x2 };
-
-    enum { hFileNull = -1 };
-
-// Constructors
-    CFile();
-    CFile(int hFile);
-
-// Attributes
-    UINT m_hFile;
-    operator HFILE() const;
-
-    virtual DWORD GetPosition() const;
-
-// Operations
-    virtual BOOL Open(LPCTSTR lpszFileName, UINT nOpenFlags);
-
-    static BOOL PASCAL Rename(LPCTSTR lpszOldName,
-                LPCTSTR lpszNewName);
-    static BOOL PASCAL Remove(LPCTSTR lpszFileName);
-
-    DWORD SeekToEnd();
-    void SeekToBegin();
-
-
-// Overridables
-    virtual LONG Seek(LONG lOff, UINT nFrom);
-    virtual UINT SetLength(DWORD dwNewLen);
-    virtual DWORD GetLength() const;
-
-    virtual UINT Read(void* lpBuf, UINT nCount);
-    virtual BOOL Write(const void* lpBuf, UINT nCount);
-
-    virtual BOOL LockRange(DWORD dwPos, DWORD dwCount);
-    virtual BOOL UnlockRange(DWORD dwPos, DWORD dwCount);
-
-    virtual void Abort();
-    virtual BOOL Flush();
-    virtual BOOL Close();
-
-// Implementation
-public:
-    virtual ~CFile();
-
-protected:
-    BOOL m_bCloseOnDelete;
-    TCHAR m_strFileName[_MAX_PATH];
-};
-
-
-// CFile
-inline CFile::operator HFILE() const
-    { return m_hFile; }
-inline DWORD CFile::SeekToEnd()
-    { return Seek(0, CFile::end); }
-inline void CFile::SeekToBegin()
-    { Seek(0, CFile::begin); }
-
+#define ASSERT    assert
 
 
 /////////////////////////////////////////////////////////////////////////////
-// STDIO file implementation
+// CFile - raw unbuffered disk file I/O
 
-class CStdioFile : public CFile
+namespace CFile
 {
-public:
-// Constructors
-    CStdioFile();
-    CStdioFile(FILE* pOpenStream);
+	// Flag values
+	enum OpenFlags {
+		modeRead = (int)0x00000,
+		modeWrite = (int)0x00001,
+		modeReadWrite = (int)0x00002,
+		shareCompat = (int)0x00000,
+		shareExclusive = (int)0x00010,
+		shareDenyWrite = (int)0x00020,
+		shareDenyRead = (int)0x00030,
+		shareDenyNone = (int)0x00040,
+		modeNoInherit = (int)0x00080,
+#ifdef _UNICODE
+		typeUnicode = (int)0x00400, // used in derived classes only
+#endif
+		modeCreate = (int)0x01000,
+		modeNoTruncate = (int)0x02000,
+		typeText = (int)0x04000, // used in derived classes only
+		typeBinary = (int)0x08000, // used in derived classes only
+		osNoBuffer = (int)0x10000,
+		osWriteThrough = (int)0x20000,
+		osRandomAccess = (int)0x40000,
+		osSequentialScan = (int)0x80000,
+	};
 
-// Attributes
-    FILE* m_pStream;    // stdio FILE
-                        // m_hFile from base class is _fileno(m_pStream)
+	enum Attribute {
+		normal = 0x00,                // note: not same as FILE_ATTRIBUTE_NORMAL
+		readOnly = FILE_ATTRIBUTE_READONLY,
+		hidden = FILE_ATTRIBUTE_HIDDEN,
+		system = FILE_ATTRIBUTE_SYSTEM,
+		volume = 0x08,
+		directory = FILE_ATTRIBUTE_DIRECTORY,
+		archive = FILE_ATTRIBUTE_ARCHIVE,
+		device = FILE_ATTRIBUTE_DEVICE,
+		temporary = FILE_ATTRIBUTE_TEMPORARY,
+		sparse = FILE_ATTRIBUTE_SPARSE_FILE,
+		reparsePt = FILE_ATTRIBUTE_REPARSE_POINT,
+		compressed = FILE_ATTRIBUTE_COMPRESSED,
+		offline = FILE_ATTRIBUTE_OFFLINE,
+		notIndexed = FILE_ATTRIBUTE_NOT_CONTENT_INDEXED,
+		encrypted = FILE_ATTRIBUTE_ENCRYPTED
+	};
 
-// Operations
-    // reading and writing strings
-    virtual int WriteString(LPCTSTR lpsz);
-    virtual LPTSTR ReadString(LPTSTR lpsz, UINT nMax);
+	enum SeekPosition { begin = 0x0, current = 0x1, end = 0x2 };
 
-// Implementation
-public:
-    virtual ~CStdioFile();
-    virtual DWORD GetPosition() const;
-    virtual BOOL Open(LPCTSTR lpszFileName, UINT nOpenFlags);
-    virtual UINT Read(void* lpBuf, UINT nCount);
-    virtual BOOL Write(const void* lpBuf, UINT nCount);
-    virtual LONG Seek(LONG lOff, UINT nFrom);
-    virtual void Abort();
-    virtual BOOL Flush();
-    virtual BOOL Close();
+	HANDLE Open(LPCTSTR lpszFileName, UINT nOpenFlags);
+
+	// Operations
+	ULONG Seek(HANDLE hFile, LONG lOff, UINT nFrom);
+	ULONG SeekToEnd(HANDLE hFile);
+	void SeekToBegin(HANDLE hFile);
+	LONGLONG Seek(HANDLE hFile, LONGLONG lOff, UINT nFrom);
+	LONG GetPosition(HANDLE hFile);
+	LONGLONG GetLength(HANDLE hFile);
+	BOOL SetLength(HANDLE hFile, ULONGLONG dwNewLen);
+
+	BOOL Read(HANDLE hFile, void* lpBuf, UINT nCount, UINT& nRead);
+	BOOL Write(HANDLE hFile, const void* lpBuf, UINT nCount);
+	BOOL Flush(HANDLE hFile);
+	BOOL Close(HANDLE hFile);
+
+	BOOL LockRange(HANDLE hFile, ULONGLONG dwPos, ULONGLONG dwCount);
+	BOOL UnlockRange(HANDLE hFile, ULONGLONG dwPos, ULONGLONG dwCount);
 };
+
+
+AFX_INLINE ULONG CFile::Seek(HANDLE hFile, LONG lOff, UINT nFrom)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	ASSERT(nFrom == begin || nFrom == end || nFrom == current);
+	ASSERT(begin == FILE_BEGIN && end == FILE_END && current == FILE_CURRENT);
+
+	return ::SetFilePointer(hFile, lOff, NULL, (UINT)nFrom);
+}
+
+AFX_INLINE ULONG CFile::SeekToEnd(HANDLE hFile)
+{
+	return Seek(hFile, (LONG)0, end);
+}
+
+AFX_INLINE void CFile::SeekToBegin(HANDLE hFile)
+{
+	Seek(hFile, (LONG)0, begin);
+}
+
+AFX_INLINE LONG CFile::GetPosition(HANDLE hFile)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	return ::SetFilePointer(hFile, 0, NULL, FILE_CURRENT);
+}
+
+AFX_INLINE BOOL CFile::Read(HANDLE hFile, void* lpBuf, UINT nCount, UINT& nRead)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	ASSERT(lpBuf != NULL);
+	ASSERT(nCount != 0);
+
+	return ::ReadFile(hFile, lpBuf, nCount, (DWORD *)&nRead, NULL);
+}
+
+AFX_INLINE BOOL CFile::Write(HANDLE hFile, const void* lpBuf, UINT nCount)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	ASSERT(lpBuf != NULL);
+	ASSERT(nCount != 0);
+
+	DWORD nWritten;
+	return ::WriteFile(hFile, lpBuf, nCount, &nWritten, NULL)
+		&& (nWritten == nCount);
+}
+
+AFX_INLINE BOOL CFile::Flush(HANDLE hFile)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	return ::FlushFileBuffers(hFile);
+}
+
+AFX_INLINE BOOL CFile::Close(HANDLE hFile)
+{
+	ASSERT(hFile != INVALID_HANDLE_VALUE);
+	return ::CloseHandle(hFile);
+}
