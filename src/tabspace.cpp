@@ -116,15 +116,16 @@ MAKE_NAMES:
 	// we do not think of a different name to avoid name clash
 	// because that is too rare
 	if (PathFileExists(tscfilename) ||
-		!(tscfile = CFile::Open(tscfilename,
-			CFile::modeWrite | CFile::modeCreate | CFile::typeBinary))) {
+		(INVALID_HANDLE_VALUE == (tscfile = CFile::Open(tscfilename,
+			CFile::modeWrite | CFile::modeCreate | CFile::typeBinary)))) {
 		_tprintf(_T("%s : conversion failed when creating TSC file\n"),
 			filename);
 		return;
 	}
 
 	// open the original file
-	if (!(orgfile = CFile::Open(filename, CFile::modeRead | CFile::typeBinary))) {
+	if (INVALID_HANDLE_VALUE ==
+		(orgfile = CFile::Open(filename, CFile::modeRead | CFile::typeBinary))) {
 		_tprintf(_T("%s : conversion failed when opening it\n"), filename);
 
 ABORT_TSC:
