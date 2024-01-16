@@ -24,14 +24,10 @@
 
 #include <shlwapi.h>
 #include <minwinbase.h>
+#include <stdio.h>
 #include "cfile.h"
 #include "fabsr.h"
 #include "fabsw.h"
-
-
-extern "C" {
-	TCHAR* strcpy_x(TCHAR* strdst, const TCHAR* strdst_end, const TCHAR* strsrc);
-}
 
 // State values
 enum State {
@@ -39,7 +35,6 @@ enum State {
 	stRightSeg = (int)0x00001,
 	stExpectLF = (int)0x00002
 };
-
 
 #define TAB             '\t'
 #define SPACE           ' '
@@ -79,7 +74,7 @@ void TSConvert(LPCTSTR filename)
 {
 	LPCTSTR suffix_bak = _T("bak");
 	LPCTSTR suffix_tsc = _T("tsc"); // tsc = tab-space converted
-	LPCTSTR p, strend;
+	LPCTSTR p;
 	HANDLE orgfile, tscfile;
 	BOOL changed;
 	enum State state;
@@ -105,12 +100,10 @@ void TSConvert(LPCTSTR filename)
 
 MAKE_NAMES:
 	// the backup file name is the orginal file name plus "bak" or ".bak"
-	strend = &bakfilename[MAX_PATH-1];
-	strcpy_x(strcpy_x(bakfilename, strend, filename), strend, suffix_bak);
+	_stprintf_s(bakfilename, MAX_PATH, _T("%s%s"), filename, suffix_bak);
 
 	// the tsc file name is the orginal file name plus "tsc" or ".tsc"
-	strend = &tscfilename[MAX_PATH-1];
-	strcpy_x(strcpy_x(tscfilename, strend, filename), strend, suffix_tsc);
+	_stprintf_s(tscfilename, MAX_PATH, _T("%s%s"), filename, suffix_tsc);
 
 	// now create the tsc file, it must not name-clash with existing files
 	// we do not think of a different name to avoid name clash

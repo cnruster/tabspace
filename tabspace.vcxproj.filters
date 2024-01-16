@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\strcpy_x.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\cfile1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

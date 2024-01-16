@@ -11,10 +11,12 @@
 #include <assert.h>
 
 #ifndef AFX_INLINE
-#define AFX_INLINE inline /*__forceinline*/
+#define AFX_INLINE	inline
 #endif
 
-#define ASSERT    assert
+#ifndef ASSERT
+#define ASSERT		assert
+#endif
 
 
 /////////////////////////////////////////////////////////////////////////////

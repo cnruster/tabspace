@@ -80,7 +80,6 @@
     <ClCompile Include="src\cfile1.cpp" />
     <ClCompile Include="src\fabsr.cpp" />
     <ClCompile Include="src\fabsw.cpp" />
-    <ClCompile Include="src\strcpy_x.c" />
     <ClCompile Include="src\tabspace.cpp" />
     <ClCompile Include="src\tsmain.cpp" />
   </ItemGroup>
