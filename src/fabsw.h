@@ -13,19 +13,19 @@
 class FABSW
 {
 public:
-	void Bind(HANDLE hOpenFile);
-	BOOL PutByte(BYTE byte);
-	BOOL PutBytes(BYTE byte, UINT rep);
-	BOOL PutBytes(BYTE* bytes);
-	BOOL EndPut();
-	UINT GetPutCount() const;
+    void Bind(HANDLE hOpenFile);
+    BOOL PutByte(BYTE byte);
+    BOOL PutBytes(BYTE byte, UINT rep);
+    BOOL PutBytes(BYTE* bytes);
+    BOOL EndPut();
+    UINT GetPutCount() const;
 
 protected:
-	HANDLE m_hFile;
+    HANDLE m_hFile;
 
 private:
-	UINT m_nPutCount;       // this stores true put count only when ended!
-	UINT m_nWriteOps;       // how many write operations are performed
-	UINT m_nBufPtr;         // pointer to buffer
-	BYTE m_Buffer[BUF_LEN];
+    UINT m_nPutCount;       // this stores true put count only when ended!
+    UINT m_nWriteOps;       // how many write operations are performed
+    UINT m_nBufPtr;         // pointer to buffer
+    BYTE m_Buffer[BUF_LEN];
 };

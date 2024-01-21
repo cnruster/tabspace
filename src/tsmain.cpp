@@ -28,106 +28,137 @@
 #include <assert.h>
 
 
-void TSConvertFiles(LPCTSTR pattern, int level);
-void TSConvert(LPCTSTR filename);
+BOOL CheckPattern(LPCTSTR pattern);
+void ConvertFiles(LPCTSTR pattern, int level);
+void Convert(LPCTSTR filename);
+
+static TCHAR textTS[] = _T("tab-space");
+static TCHAR textAAS[] = _T("aligned all-space");
+TCHAR* szRule = textTS;
+BOOL useAAS = FALSE;
 
 
 int __cdecl _tmain(int argc, TCHAR** argv)
 {
-	_tprintf(_T("Tabspace Code Beautifier 1.0\n"
-		"Compiled on "__DATE__"\n"
-		"Copyright (c)2023-2024 Yiping Cheng\n"
-		"Beijing Jiaotong University, China. Email:ypcheng@bjtu.edu.cn\n"
-		"https://github.com/cnruster\n"));
+    _tprintf(_T("Tabspace Code Beautifier 1.1\n"
+        "Compiled on "__DATE__"\n"
+        "Copyright (c)2023-2024 Yiping Cheng\n"
+        "Beijing Jiaotong University, China. Email:ypcheng@bjtu.edu.cn\n"
+        "https://github.com/cnruster\n"));
 
-	if (argc < 2) {
-		_tprintf(_T("\nUsage: tabspace <pattern_1> <pattern_2> ... <pattern_n>\n"
-			"For example: tabspace *.c *.cpp *.h\n"));
-	}
-	else {
-		// each argument is a pattern
-		for (int i = 1; i < argc; i++) {
-			TSConvertFiles(argv[i], 0);
-		}
-	}
+    if (argc < 2) {
+        _tprintf(_T("\nUsage: tabspace <pattern_1> <pattern_2> ... <pattern_n>\n"
+            "For example: tabspace *.c *.cpp *.h\n"
+            "Or to use aligned all-space rule: "
+            "tabspace /s <pattern_1> <pattern_2> ... <pattern_n>\n"));
+    }
+    else {
+        if (_tcscmp(argv[1], _T("/s"))) {
+            // use tab-space rule, each argument is a pattern
+            for (int i = 1; i < argc; i++) {
+                if (CheckPattern(argv[i])) {
+                    ConvertFiles(argv[i], 0);
+                }
+            }
+        }
+        else {
+            // use aligned all-space rule
+            useAAS = TRUE;
+            szRule = textAAS;
+            for (int i = 2; i < argc; i++) {
+                if (CheckPattern(argv[i])) {
+                    ConvertFiles(argv[i], 0);
+                }
+            }
+        }
+    }
 }
 
+BOOL CheckPattern(LPCTSTR pattern) 
+{
+    if (_tcschr(pattern, _T('/')) || _tcschr(pattern, _T('\\'))) {
+        _tprintf(_T("\nPattern contains illegal character '/' or '\\'\n"));
+        return FALSE;
+    }
+
+    if (!_tcscmp(pattern, _T("*")) || _tcsstr(pattern, _T(".*"))) {
+        _tprintf(_T("\nTabspace refuses to do this pattern: %s\n"), pattern);
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 #define MAX_RECURSION_DEPTH     24
 
-// perform tab-space conversion to files matching the pattern
-void TSConvertFiles(LPCTSTR pattern, int level)
+// perform tabspace conversion to files matching the pattern
+void ConvertFiles(LPCTSTR pattern, int level)
 {
-	if (!_tcscmp(pattern, _T("*")) || _tcsstr(pattern, _T(".*"))) {
-		_tprintf(_T("\nTabspace refuses to do this pattern: %s\n"), pattern);
-		return;
-	}
+    {
+        // display the pattern and current directory
+        // this is enclosed by {} to save stack space
+        // after all, this is a recursive function
+        TCHAR curr_dir[MAX_PATH];
+        GetCurrentDirectory(MAX_PATH, curr_dir);
+        _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
+            szRule, pattern, curr_dir);
+    }
 
-	{
-		// display the pattern and current directory
-		// this is enclosed by {} to save stack space
-		// after all, this is a recursive function
-		TCHAR curr_dir[MAX_PATH];
-		GetCurrentDirectory(MAX_PATH, curr_dir);
-		_tprintf(_T("\nTabspace beautifying %s files in %s\n"),
-			pattern, curr_dir);
-	}
+    WIN32_FIND_DATA FindFileData;
+    HANDLE hFind;
 
-	WIN32_FIND_DATA FindFileData;
-	HANDLE hFind;
+    // find the first file
+    if (INVALID_HANDLE_VALUE == (hFind = FindFirstFile(pattern, &FindFileData))) {
+        if (ERROR_FILE_NOT_FOUND == GetLastError()) {
+            _tprintf(_T("No file in this directory matches %s\n"),
+                pattern);
+        }
+        else {
+            _tprintf(_T("FindFirstFile for %s failed\n"), pattern);
+        }
 
-	// find the first file
-	if (INVALID_HANDLE_VALUE == (hFind = FindFirstFile(pattern, &FindFileData))) {
-		if (ERROR_FILE_NOT_FOUND == GetLastError()) {
-			_tprintf(_T("No file in this directory matches %s\n"),
-				pattern);
-		}
-		else {
-			_tprintf(_T("FindFirstFile for %s failed\n"), pattern);
-		}
+        goto SUB_DIRS;
+    }
 
-		goto SUB_DIRS;
-	}
+    do {
+        if (GetFileAttributes(FindFileData.cFileName)
+            & FILE_ATTRIBUTE_DIRECTORY) {
+            continue;
+        }
 
-	do {
-		if (GetFileAttributes(FindFileData.cFileName)
-			& FILE_ATTRIBUTE_DIRECTORY) {
-			continue;
-		}
+        // now this is a file, not a directory, so do conversion
+        Convert(FindFileData.cFileName);
 
-		// now this is a file, not a directory, so do conversion
-		TSConvert(FindFileData.cFileName);
-
-	} while (FindNextFile(hFind, &FindFileData));
+    } while (FindNextFile(hFind, &FindFileData));
 
 SUB_DIRS:
-	if (MAX_RECURSION_DEPTH == ++level) {
-		_tprintf(_T("Maximum recursion depth %d is reached. "
-			"Tabspace will not process subdirectories of this directory.\n"),
-			MAX_RECURSION_DEPTH);
-		return;
-	}
+    if (MAX_RECURSION_DEPTH == ++level) {
+        _tprintf(_T("Maximum recursion depth %d is reached. "
+            "Tabspace will not process subdirectories of this directory.\n"),
+            MAX_RECURSION_DEPTH);
+        return;
+    }
 
-	if (INVALID_HANDLE_VALUE == (hFind = FindFirstFileEx(_T("*"),
-		FindExInfoStandard,
-		&FindFileData,
-		FindExSearchLimitToDirectories,
-		NULL,
-		0))) {
-		return;
-	}
+    if (INVALID_HANDLE_VALUE == (hFind = FindFirstFileEx(_T("*"),
+        FindExInfoStandard,
+        &FindFileData,
+        FindExSearchLimitToDirectories,
+        NULL,
+        0))) {
+        return;
+    }
 
-	do {
-		assert(_tcscmp(FindFileData.cFileName, _T("")));
+    do {
+        assert(_tcscmp(FindFileData.cFileName, _T("")));
 
-		// do tab-space conversion to subdirectories
-		if (_tcscmp(FindFileData.cFileName, _T(".")) &&
-			_tcscmp(FindFileData.cFileName, _T("..")) &&
-			!_tcsstr(FindFileData.cFileName, _T("\\")) &&
-			!_tcsstr(FindFileData.cFileName, _T("/")) &&
-			SetCurrentDirectory(FindFileData.cFileName)) {
-			TSConvertFiles(pattern, level);
-			SetCurrentDirectory(_T(".."));
-		}
-	} while (FindNextFile(hFind, &FindFileData));
+        // do tab-space conversion to subdirectories
+        if (_tcscmp(FindFileData.cFileName, _T(".")) &&
+            _tcscmp(FindFileData.cFileName, _T("..")) &&
+            !_tcschr(FindFileData.cFileName, _T('\\')) &&
+            !_tcschr(FindFileData.cFileName, _T('/')) &&
+            SetCurrentDirectory(FindFileData.cFileName)) {
+            ConvertFiles(pattern, level);
+            SetCurrentDirectory(_T(".."));
+        }
+    } while (FindNextFile(hFind, &FindFileData));
 }
