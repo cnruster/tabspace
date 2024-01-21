@@ -22,7 +22,7 @@ Therefore I wrote a small utility TabSpace (currently, only under Windows) for t
 
 Tabspace \*. go \*. py
 
-The code beautification functions of TabSpace also include:
+The code beautification functions of TabSpace include:
 
 1. Tab-Space rule enforcement
 
@@ -39,3 +39,5 @@ In TabSpace, when converting a tab to spaces or vice versa, it is stipulated tha
 TabSpace refuses to perform conversion for the patterns "\*" and ".\*", since the conversion is meaningful only for code files.
 
 So just enjoy! Should you find any bugs, feel free to contact me via the address provided above.
+
+**Jan 21, 2024 update: Some programmers still like the aligned all-space rule I previously adopted before thinking of the tab-space rule, as they are are willing to trade the waste of disk space for absolute visual consistency. So I now readd the aligned all-space rule. Aligned means the number of leading spaces (before first non-space non-tab character) is always a multiple of 4.**
