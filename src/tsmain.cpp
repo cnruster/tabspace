@@ -32,9 +32,9 @@ BOOL CheckPattern(LPCTSTR pattern);
 void ConvertFiles(LPCTSTR pattern, int level);
 void Convert(LPCTSTR filename);
 
-static TCHAR textTS[] = _T("tab-space");
-static TCHAR textAAS[] = _T("aligned all-space");
-TCHAR* szRule = textTS;
+static TCHAR nameTS[] = _T("tab-space");
+static TCHAR nameAAS[] = _T("aligned all-space");
+TCHAR* rule_name = nameTS;
 BOOL useAAS = FALSE;
 
 
@@ -64,7 +64,7 @@ int __cdecl _tmain(int argc, TCHAR** argv)
         else {
             // use aligned all-space rule
             useAAS = TRUE;
-            szRule = textAAS;
+            rule_name = nameAAS;
             for (int i = 2; i < argc; i++) {
                 if (CheckPattern(argv[i])) {
                     ConvertFiles(argv[i], 0);
@@ -74,15 +74,35 @@ int __cdecl _tmain(int argc, TCHAR** argv)
     }
 }
 
-BOOL CheckPattern(LPCTSTR pattern) 
+UINT str_chr_count(LPCTSTR str, TCHAR chr)
+{
+    UINT cnt = 0;
+    for (LPCTSTR p = str; *p; p++) {
+        if (*p == chr) {
+            cnt++;
+        }
+    }
+
+    return cnt;
+}
+
+BOOL CheckPattern(LPCTSTR pattern)
 {
     if (_tcschr(pattern, _T('/')) || _tcschr(pattern, _T('\\'))) {
-        _tprintf(_T("\nPattern contains illegal character '/' or '\\'\n"));
+        _tprintf(_T("\nIllegal pattern %s, as it contains / or \\\n"), pattern);
         return FALSE;
     }
 
     if (!_tcscmp(pattern, _T("*")) || _tcsstr(pattern, _T(".*"))) {
         _tprintf(_T("\nTabspace refuses to do this pattern: %s\n"), pattern);
+        return FALSE;
+    }
+
+    TCHAR curr_dir[MAX_PATH];
+    GetCurrentDirectory(MAX_PATH, curr_dir);
+    if (1 >= str_chr_count(curr_dir, _T('\\'))) {
+        _tprintf(_T("\nTabspace refuses to work in a root"
+            " or first-level directory : %s\n"), curr_dir);
         return FALSE;
     }
 
@@ -101,7 +121,7 @@ void ConvertFiles(LPCTSTR pattern, int level)
         TCHAR curr_dir[MAX_PATH];
         GetCurrentDirectory(MAX_PATH, curr_dir);
         _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
-            szRule, pattern, curr_dir);
+            rule_name, pattern, curr_dir);
     }
 
     WIN32_FIND_DATA FindFileData;
@@ -151,7 +171,7 @@ SUB_DIRS:
     do {
         assert(_tcscmp(FindFileData.cFileName, _T("")));
 
-        // do tab-space conversion to subdirectories
+        // do conversion for subdirectories
         if (_tcscmp(FindFileData.cFileName, _T(".")) &&
             _tcscmp(FindFileData.cFileName, _T("..")) &&
             !_tcschr(FindFileData.cFileName, _T('\\')) &&

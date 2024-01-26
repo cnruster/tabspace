@@ -29,7 +29,7 @@
 #include "fabsr.h"
 #include "fabsw.h"
 
-extern TCHAR* szRule;
+extern TCHAR* rule_name;
 extern BOOL useAAS;
 
 // State values
@@ -250,7 +250,7 @@ FAIL:
     if (!changed) {
         // the tsc file is the same as the original file, so delete it
         _tprintf(_T("%s : already %s compliant so left unchanged\n"),
-            filename, szRule);
+            filename, rule_name);
         goto ABORT_TSC;
     }
 
@@ -284,5 +284,5 @@ FAIL:
         return;
     }
 
-    _tprintf(_T("%s : %s conversion successful\n"), filename, szRule);
+    _tprintf(_T("%s : %s conversion successful\n"), filename, rule_name);
 }
