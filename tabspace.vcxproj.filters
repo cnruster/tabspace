@@ -15,10 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="src\tabspace.cpp">
+    <ClCompile Include="tabspace.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\tsmain.cpp">
+    <ClCompile Include="tsmain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
