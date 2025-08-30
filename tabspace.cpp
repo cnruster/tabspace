@@ -136,14 +136,13 @@ void Convert(LPCTSTR filename) noexcept
                 goto ABORT_TSC;
             }
             // end of file encountered
-            if (state != stExpectLF) {
-                if (ccws) {
-                    changed = TRUE; // because the trailing spaces are discarded
-                }
-            } else {
-                PUT_BYTE_MAIN(LF);
+            if (ccws) {
+                changed = TRUE; // because the trailing spaces are discarded
             }
-
+            if (state == stExpectLF) {
+                PUT_BYTE_MAIN(LF); // no need to set changed to TRUE because it is
+                                   // already set when processing the CR
+            }
             break;
         }
 
