@@ -9,25 +9,32 @@
 #include <tchar.h>
 #include <windows.h>
 
+UINT str_chr_count(LPCTSTR str, TCHAR chr) noexcept;
 BOOL CheckPattern(LPCTSTR pattern) noexcept;
 void ConvertFiles(LPCTSTR pattern, int level) noexcept;
 void Convert(LPCTSTR filename) noexcept;
 
 static const TCHAR nameTS[10] = _T("tab-space");
 static const TCHAR nameAAS[18] = _T("aligned all-space");
-const TCHAR* rule_name = nameTS;
 BOOL useAAS = FALSE;
-FILE* orgfile;
-FILE* tscfile;
+const TCHAR* rule_name = nameTS;
 
 int __cdecl _tmain(int argc, TCHAR** argv)
 {
+
     _tprintf(_T("Tabspace Code Beautifier 1.2\n"
-                "Compiled on "__DATE__
-                "\n"
+                "Compiled on "__DATE__"\n"
                 "Copyright (c)2023-2024 Yiping Cheng\n"
                 "Beijing Jiaotong University, China. Email:ypcheng@bjtu.edu.cn\n"
                 "https://github.com/cnruster\n"));
+
+    if (argc >= 2 && !_tcscmp(argv[1], _T("/s"))) {
+        ++argv;
+        --argc;
+        // use aligned all-space rule
+        useAAS = TRUE;
+        rule_name = nameAAS;
+    }
 
     if (argc < 2) {
         _tprintf(_T("\nUsage: tabspace <pattern_1> <pattern_2> ... <pattern_n>\n"
@@ -37,21 +44,24 @@ int __cdecl _tmain(int argc, TCHAR** argv)
         return -1;
     }
 
-    if (_tcscmp(argv[1], _T("/s"))) {
-        // use tab-space rule, each argument is a pattern
-        for (int i = 1; i < argc; i++) {
-            if (CheckPattern(argv[i])) {
-                ConvertFiles(argv[i], 0);
-            }
-        }
-    } else {
-        // use aligned all-space rule
-        useAAS = TRUE;
-        rule_name = nameAAS;
-        for (int i = 2; i < argc; i++) {
-            if (CheckPattern(argv[i])) {
-                ConvertFiles(argv[i], 0);
-            }
+    TCHAR curr_dir[MAX_PATH];
+    DWORD dir_len = GetCurrentDirectory(MAX_PATH, curr_dir);
+    if (dir_len == 0 || dir_len >= MAX_PATH) {
+        _tprintf(_T("\nGetCurrentDirectory failed\n"));
+        return -2;
+    }
+    if (1 >= str_chr_count(curr_dir, _T('\\'))) {
+        _tprintf(_T("\nTabspace refuses to work in a root"
+                    " or first-level directory : %s\n"),
+            curr_dir);
+        return -3;
+    }
+
+    for (int i = 1; i < argc; i++) {
+        if (CheckPattern(argv[i])) {
+            _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
+                rule_name, argv[i], curr_dir);
+            ConvertFiles(argv[i], 0);
         }
     }
 }
@@ -80,64 +90,35 @@ BOOL CheckPattern(LPCTSTR pattern) noexcept
         return FALSE;
     }
 
-    TCHAR curr_dir[MAX_PATH];
-    GetCurrentDirectory(MAX_PATH, curr_dir);
-    if (1 >= str_chr_count(curr_dir, _T('\\'))) {
-        _tprintf(_T("\nTabspace refuses to work in a root"
-                    " or first-level directory : %s\n"),
-            curr_dir);
-        return FALSE;
-    }
-
     return TRUE;
 }
 
-#define MAX_RECURSION_DEPTH 24
 
 // perform tabspace conversion to files matching the pattern
 void ConvertFiles(LPCTSTR pattern, int level) noexcept
 {
-    {
-        // display the pattern and current directory
-        // this is enclosed by {} to save stack space
-        // after all, this is a recursive function
-        TCHAR curr_dir[MAX_PATH];
-        DWORD dir_len = GetCurrentDirectory(MAX_PATH, curr_dir);
-        if (dir_len == 0 || dir_len >= MAX_PATH) {
-            _tprintf(_T("GetCurrentDirectory failed\n"));
-            return;
-        }
-        _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
-            rule_name, pattern, curr_dir);
-    }
-
+    constexpr int MAX_RECURSION_DEPTH = 24;
     WIN32_FIND_DATA FindFileData;
     HANDLE hFind;
 
     // find the first file
     if (INVALID_HANDLE_VALUE == (hFind = FindFirstFile(pattern, &FindFileData))) {
-        if (ERROR_FILE_NOT_FOUND == GetLastError()) {
-            _tprintf(_T("No file in this directory matches %s\n"),
-                pattern);
-        } else {
+        if (ERROR_FILE_NOT_FOUND != GetLastError()) {
             _tprintf(_T("FindFirstFile for %s failed\n"), pattern);
         }
+    } else {
+        do {
+            if (GetFileAttributes(FindFileData.cFileName)
+                & FILE_ATTRIBUTE_DIRECTORY) {
+                continue;
+            }
 
-        goto SUB_DIRS;
+            // now this is a file, not a directory, so do conversion
+            Convert(FindFileData.cFileName);
+
+        } while (FindNextFile(hFind, &FindFileData));
     }
 
-    do {
-        if (GetFileAttributes(FindFileData.cFileName)
-            & FILE_ATTRIBUTE_DIRECTORY) {
-            continue;
-        }
-
-        // now this is a file, not a directory, so do conversion
-        Convert(FindFileData.cFileName);
-
-    } while (FindNextFile(hFind, &FindFileData));
-
-SUB_DIRS:
     if (MAX_RECURSION_DEPTH == ++level) {
         _tprintf(_T("Maximum recursion depth %d is reached. "
                     "Tabspace will not process subdirectories of this directory.\n"),
@@ -145,7 +126,8 @@ SUB_DIRS:
         return;
     }
 
-    if (INVALID_HANDLE_VALUE == (hFind = FindFirstFileEx(_T("*"), FindExInfoStandard, &FindFileData, FindExSearchLimitToDirectories, NULL, 0))) {
+    if (INVALID_HANDLE_VALUE ==
+        (hFind = FindFirstFileEx(_T("*"), FindExInfoStandard, &FindFileData, FindExSearchLimitToDirectories, NULL, 0))) {
         return;
     }
 
