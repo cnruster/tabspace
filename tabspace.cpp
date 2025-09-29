@@ -9,10 +9,10 @@
 #include <tchar.h>
 #include <windows.h>
 
-extern const TCHAR* rule_name;
-extern BOOL useAAS;
-extern FILE* orgfile;
-extern FILE* tscfile;
+LPCTSTR RuleName(BOOL useAAS) noexcept
+{
+    return useAAS ? _T("aligned all-space") : _T("tab-space");
+}
 
 // State values
 enum State {
@@ -53,14 +53,14 @@ enum State {
         }                                   \
     } while (0)
 
-inline BOOL IsValidFilePath(LPCTSTR filePath) noexcept
+inline BOOL IsValidPath(LPCTSTR filePath) noexcept
 {
     DWORD fa = GetFileAttributes(filePath);
     // Check if the path exists and is a file (not a directory)
-    return (fa != INVALID_FILE_ATTRIBUTES && !(fa & FILE_ATTRIBUTE_DIRECTORY));
+    return (fa != INVALID_FILE_ATTRIBUTES);
 }
 
-inline BOOL IsSuffix(const TCHAR* strWhole, const TCHAR* strSub) noexcept
+BOOL IsSuffix(const TCHAR* strWhole, const TCHAR* strSub) noexcept
 {
     assert(strWhole && strSub);
 
@@ -76,16 +76,11 @@ inline BOOL IsSuffix(const TCHAR* strWhole, const TCHAR* strSub) noexcept
     return _tcscmp(strWhole + len1 - len2, strSub) == 0;
 }
 
-void Convert(LPCTSTR filename) noexcept
+void Convert(LPCTSTR filename, BOOL useAAS) noexcept
 {
     static const TCHAR suffix_bak[5] = _T(".bak");
     static const TCHAR suffix_tsc[5] = _T(".tsc"); // tsc = tab-space converted
     TCHAR bakfilename[MAX_PATH], tscfilename[MAX_PATH];
-    BOOL changed;
-    enum State state;
-    UINT ccws; // count of consecutive white spaces
-    int ch;
-    BYTE byte;
 
     if (IsSuffix(filename, suffix_bak)) {
         _tprintf(_T("%s : not processed by Tabspace as its extension is %s\n"),
@@ -99,6 +94,12 @@ void Convert(LPCTSTR filename) noexcept
         return;
     }
 
+    // test whether the bak file name clashes with existing files
+    if (IsValidPath(bakfilename)) {
+        _tprintf(_T("%s : conversion failed because BAK file name clashes with an existing file\n"), filename);
+        return;
+    }
+
     // the tsc file name is the orginal file name plus ".tsc"
     if (_stprintf_s(tscfilename, MAX_PATH, _T("%s%s"), filename, suffix_tsc) < 0) {
         _tprintf(_T("%s : failed to make tsc file name\n"), filename);
@@ -108,13 +109,19 @@ void Convert(LPCTSTR filename) noexcept
     // now create the tsc file, it must not name-clash with existing files
     // we do not think of a different name to avoid name clash
     // because that is too rare
-    if (IsValidFilePath(tscfilename) || (tscfile=_tfopen(tscfilename, _T("wb")))==nullptr) {
+    if (IsValidPath(tscfilename)) {
+        _tprintf(_T("%s : conversion failed because TSC file name clashes with an existing file\n"), filename);
+        return;
+    }
+    FILE* tscfile = _tfopen(tscfilename, _T("wb"));
+    if (tscfile == nullptr) {
         _tprintf(_T("%s : conversion failed when creating TSC file\n"), filename);
         return;
     }
 
     // open the original file
-    if ((orgfile = _tfopen(filename, _T("rb"))) == nullptr) {
+    FILE* orgfile = _tfopen(filename, _T("rb"));
+    if (orgfile == nullptr) {
         _tprintf(_T("%s : conversion failed when opening original file\n"), filename);
     ABORT_TSC:
         fclose(tscfile);
@@ -123,9 +130,11 @@ void Convert(LPCTSTR filename) noexcept
     }
 
     // now the actual conversion begins
-    changed = FALSE;
-    state = stInitial;
-    ccws = 0;
+    BOOL changed = FALSE;
+    enum State state = stInitial;
+    UINT ccws = 0; // count of consecutive white spaces
+    int ch;
+    BYTE byte;
 
     for (;;) {
         if ((ch = fgetc(orgfile)) == EOF) {
@@ -226,7 +235,7 @@ void Convert(LPCTSTR filename) noexcept
     if (!changed) {
         // the tsc file is the same as the original file, so delete it
         _tprintf(_T("%s : already %s compliant so left unchanged\n"),
-            filename, rule_name);
+            filename, RuleName(useAAS));
         goto ABORT_TSC;
     }
 
@@ -252,5 +261,5 @@ void Convert(LPCTSTR filename) noexcept
         return;
     }
 
-    _tprintf(_T("%s : %s conversion successful\n"), filename, rule_name);
+    _tprintf(_T("%s : %s conversion successful\n"), filename, RuleName(useAAS));
 }

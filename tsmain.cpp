@@ -11,29 +11,25 @@
 
 UINT str_chr_count(LPCTSTR str, TCHAR chr) noexcept;
 BOOL CheckPattern(LPCTSTR pattern) noexcept;
-void ConvertFiles(LPCTSTR pattern, int level) noexcept;
-void Convert(LPCTSTR filename) noexcept;
-
-static const TCHAR nameTS[10] = _T("tab-space");
-static const TCHAR nameAAS[18] = _T("aligned all-space");
-BOOL useAAS = FALSE;
-const TCHAR* rule_name = nameTS;
+void ConvertFiles(LPCTSTR pattern, int level, BOOL useAAS) noexcept;
+void Convert(LPCTSTR filename, BOOL useAAS) noexcept;
+LPCTSTR RuleName(BOOL useAAS) noexcept;
 
 int __cdecl _tmain(int argc, TCHAR** argv)
 {
-
     _tprintf(_T("Tabspace Code Beautifier 1.2\n"
-                "Compiled on "__DATE__"\n"
+                "Compiled on "__DATE__
+                "\n"
                 "Copyright (c)2023-2024 Yiping Cheng\n"
                 "Beijing Jiaotong University, China. Email:ypcheng@bjtu.edu.cn\n"
                 "https://github.com/cnruster\n"));
 
+    BOOL useAAS = FALSE; // use tab-space rule by default
     if (argc >= 2 && !_tcscmp(argv[1], _T("/s"))) {
         ++argv;
         --argc;
         // use aligned all-space rule
         useAAS = TRUE;
-        rule_name = nameAAS;
     }
 
     if (argc < 2) {
@@ -60,8 +56,8 @@ int __cdecl _tmain(int argc, TCHAR** argv)
     for (int i = 1; i < argc; i++) {
         if (CheckPattern(argv[i])) {
             _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
-                rule_name, argv[i], curr_dir);
-            ConvertFiles(argv[i], 0);
+                RuleName(useAAS), argv[i], curr_dir);
+            ConvertFiles(argv[i], 0, useAAS);
         }
     }
 }
@@ -93,16 +89,16 @@ BOOL CheckPattern(LPCTSTR pattern) noexcept
     return TRUE;
 }
 
-
 // perform tabspace conversion to files matching the pattern
-void ConvertFiles(LPCTSTR pattern, int level) noexcept
+void ConvertFiles(LPCTSTR pattern, int level, BOOL useAAS) noexcept
 {
     constexpr int MAX_RECURSION_DEPTH = 24;
-    WIN32_FIND_DATA FindFileData;
-    HANDLE hFind;
 
     // find the first file
-    if (INVALID_HANDLE_VALUE == (hFind = FindFirstFile(pattern, &FindFileData))) {
+    WIN32_FIND_DATA FindFileData;
+    HANDLE hFind = FindFirstFile(pattern, &FindFileData);
+
+    if (INVALID_HANDLE_VALUE == hFind) {
         if (ERROR_FILE_NOT_FOUND != GetLastError()) {
             _tprintf(_T("FindFirstFile for %s failed\n"), pattern);
         }
@@ -114,32 +110,31 @@ void ConvertFiles(LPCTSTR pattern, int level) noexcept
             }
 
             // now this is a file, not a directory, so do conversion
-            Convert(FindFileData.cFileName);
+            Convert(FindFileData.cFileName, useAAS);
 
         } while (FindNextFile(hFind, &FindFileData));
+        FindClose(hFind);
     }
 
-    if (MAX_RECURSION_DEPTH == ++level) {
+    if (MAX_RECURSION_DEPTH == level) {
         _tprintf(_T("Maximum recursion depth %d is reached. "
                     "Tabspace will not process subdirectories of this directory.\n"),
             MAX_RECURSION_DEPTH);
         return;
     }
 
-    if (INVALID_HANDLE_VALUE ==
-        (hFind = FindFirstFileEx(_T("*"), FindExInfoStandard, &FindFileData, FindExSearchLimitToDirectories, NULL, 0))) {
-        return;
+    hFind = FindFirstFileEx(_T("*"), FindExInfoStandard, &FindFileData, FindExSearchLimitToDirectories, nullptr, 0);
+    if (INVALID_HANDLE_VALUE != hFind) {
+        do {
+            // do conversion for subdirectories
+            if (_tcscmp(FindFileData.cFileName, _T("")) && 
+                _tcscmp(FindFileData.cFileName, _T(".")) && 
+                _tcscmp(FindFileData.cFileName, _T("..")) && 
+                SetCurrentDirectory(FindFileData.cFileName)) {
+                ConvertFiles(pattern, level + 1, useAAS);
+                SetCurrentDirectory(_T(".."));
+            }
+        } while (FindNextFile(hFind, &FindFileData));
+        FindClose(hFind);
     }
-
-    do {
-        assert(_tcscmp(FindFileData.cFileName, _T("")));
-
-        // do conversion for subdirectories
-        if (_tcscmp(FindFileData.cFileName, _T("."))
-            && _tcscmp(FindFileData.cFileName, _T(".."))
-            && SetCurrentDirectory(FindFileData.cFileName)) {
-            ConvertFiles(pattern, level);
-            SetCurrentDirectory(_T(".."));
-        }
-    } while (FindNextFile(hFind, &FindFileData));
 }
