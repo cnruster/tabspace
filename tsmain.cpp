@@ -18,8 +18,7 @@ LPCTSTR RuleName(BOOL useAAS) noexcept;
 int __cdecl _tmain(int argc, TCHAR** argv)
 {
     _tprintf(_T("Tabspace Code Beautifier 1.2\n"
-                "Compiled on "__DATE__
-                "\n"
+                "Compiled on "__DATE__"\n"
                 "Copyright (c)2023-2024 Yiping Cheng\n"
                 "Beijing Jiaotong University, China. Email:ypcheng@bjtu.edu.cn\n"
                 "https://github.com/cnruster\n"));
@@ -43,7 +42,9 @@ int __cdecl _tmain(int argc, TCHAR** argv)
     TCHAR curr_dir[MAX_PATH];
     DWORD dir_len = GetCurrentDirectory(MAX_PATH, curr_dir);
     if (dir_len == 0 || dir_len >= MAX_PATH) {
+        // path too long to be shown, which is extremely rare 
         _tprintf(_T("\nGetCurrentDirectory failed\n"));
+        // return anyway, although it does not affect the function
         return -2;
     }
     if (1 >= str_chr_count(curr_dir, _T('\\'))) {
@@ -55,8 +56,6 @@ int __cdecl _tmain(int argc, TCHAR** argv)
 
     for (int i = 1; i < argc; i++) {
         if (CheckPattern(argv[i])) {
-            _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
-                RuleName(useAAS), argv[i], curr_dir);
             ConvertFiles(argv[i], 0, useAAS);
         }
     }
@@ -92,6 +91,22 @@ BOOL CheckPattern(LPCTSTR pattern) noexcept
 // perform tabspace conversion to files matching the pattern
 void ConvertFiles(LPCTSTR pattern, int level, BOOL useAAS) noexcept
 {
+    {
+        // display the pattern and current directory
+        // this is enclosed by {} to save stack space
+        // after all, this is a recursive function
+        TCHAR curr_dir[MAX_PATH];
+        DWORD dir_len = GetCurrentDirectory(MAX_PATH, curr_dir);
+        if (dir_len == 0 || dir_len >= MAX_PATH) {
+            _tprintf(_T("\nTabspace (using %s rule) beautifying %s files "
+                "in a directory (path too long to be shown)\n"),
+                RuleName(useAAS), pattern);
+        } else {
+            _tprintf(_T("\nTabspace (using %s rule) beautifying %s files in %s\n"),
+                RuleName(useAAS), pattern, curr_dir);
+        }
+    }
+
     constexpr int MAX_RECURSION_DEPTH = 24;
 
     // find the first file
